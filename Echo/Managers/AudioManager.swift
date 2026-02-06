@@ -264,20 +264,12 @@ final class AudioManager: ObservableObject {
             }
         }
 
-        do {
-            if !engine.isRunning {
-                try engine.start()
-            }
-            playerNode.play()
-            isPlaying = true
-            startTimeTimer()
+        // Ensure the engine (or simulator fallback) is running.
+        startAudioEngine()
 
-            #if targetEnvironment(simulator)
-            startSimulatorAmplitudeTimer()
-            #endif
-        } catch {
-            print("AudioManager: ⚠️ Failed to start engine – \(error.localizedDescription)")
-        }
+        playerNode.play()
+        isPlaying = true
+        startTimeTimer()
     }
 
     /// Pauses playback without tearing down the engine graph.
@@ -308,6 +300,25 @@ final class AudioManager: ObservableObject {
         } catch {
             print("AudioManager: ⚠️ Failed to deactivate audio session – \(error.localizedDescription)")
         }
+    }
+
+    /// Starts the audio engine or, on Simulator, a synthetic amplitude driver.
+    ///
+    /// On device, this simply starts `AVAudioEngine`. On the Simulator, we
+    /// avoid installing any taps and instead drive ``amplitude`` with a
+    /// randomized timer so UI elements can be tested without real audio.
+    func startAudioEngine() {
+        #if targetEnvironment(simulator)
+        startSimulatorAmplitudeTimer()
+        #else
+        do {
+            if !engine.isRunning {
+                try engine.start()
+            }
+        } catch {
+            print("AudioManager: ⚠️ Failed to start engine – \(error.localizedDescription)")
+        }
+        #endif
     }
 
     // MARK: - Time Tracking
@@ -348,27 +359,22 @@ final class AudioManager: ObservableObject {
 
     #if targetEnvironment(simulator)
     /// Starts a timer that feeds randomized amplitude values into the pipeline
-    /// every 0.1 seconds so UI animations can be tested in the Simulator
+    /// every 0.05 seconds so UI animations can be tested in the Simulator
     /// without touching live audio taps.
     private func startSimulatorAmplitudeTimer() {
         simulatorAmplitudeTimer?.invalidate()
 
         simulatorAmplitudeTimer = Timer.scheduledTimer(
-            withTimeInterval: 0.1,
+            withTimeInterval: 0.05,
             repeats: true
         ) { [weak self] _ in
             guard let self else { return }
 
-            // Generate a smooth-ish random amplitude curve by blending toward
-            // a random target instead of jumping directly to it.
-            let current = self.amplitude
-            let randomTarget = Float.random(in: 0.0...1.0)
-            let blended = current * 0.7 + randomTarget * 0.3
-
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.amplitude = blended
-                self.updateBassHitIfNeeded(from: blended)
+                let value = Float.random(in: 0.1...0.8)
+                self.amplitude = value
+                self.updateBassHitIfNeeded(from: value)
             }
         }
     }

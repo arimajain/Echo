@@ -155,13 +155,13 @@ final class HapticManager: ObservableObject {
     }
 
     /// Plays a short, layered \"thud + fizz\" pattern that approximates the feel
-    /// of a subwoofer cone moving air:
+    /// of a subwoofer cone moving air.
     ///
-    /// 1. A **strong, dull thud** (low sharpness, high intensity) at `t = 0`.
-    /// 2. A **faint, crisp fizz** (high sharpness, low intensity) at `t = 0.01 s`.
+    /// - Event 1 (Thud): `.hapticTransient`, intensity `1.0`, sharpness `0.1` at `t = 0`.
+    /// - Event 2 (Fizz): `.hapticTransient`, intensity `0.4`, sharpness `1.0` at `t = 0.02`.
     ///
-    /// This slight temporal offset gives the sensation of weight followed by
-    /// high-frequency texture — similar to how real-world bass often feels.
+    /// The slight delay and contrasting sharpness values create the sensation
+    /// of a heavy cone movement followed by a crisp high-frequency edge.
     func playComplexPattern() {
         guard prepareEngineIfNeeded() else {
             simulateHaptic()
@@ -169,22 +169,30 @@ final class HapticManager: ObservableObject {
         }
 
         // Thud: heavy, dull, immediate.
-        let thudIntensity = CHHapticEventParameter(parameterID: .hapticIntensity,
-                                                   value: 1.0)
-        let thudSharpness = CHHapticEventParameter(parameterID: .hapticSharpness,
-                                                   value: 0.15)
+        let thudIntensity = CHHapticEventParameter(
+            parameterID: .hapticIntensity,
+            value: 1.0
+        )
+        let thudSharpness = CHHapticEventParameter(
+            parameterID: .hapticSharpness,
+            value: 0.1
+        )
         let thud = CHHapticEvent(eventType: .hapticTransient,
                                  parameters: [thudIntensity, thudSharpness],
                                  relativeTime: 0.0)
 
         // Fizz: light, crisp, trailing just behind the thud.
-        let fizzIntensity = CHHapticEventParameter(parameterID: .hapticIntensity,
-                                                   value: 0.35)
-        let fizzSharpness = CHHapticEventParameter(parameterID: .hapticSharpness,
-                                                   value: 0.9)
+        let fizzIntensity = CHHapticEventParameter(
+            parameterID: .hapticIntensity,
+            value: 0.4
+        )
+        let fizzSharpness = CHHapticEventParameter(
+            parameterID: .hapticSharpness,
+            value: 1.0
+        )
         let fizz = CHHapticEvent(eventType: .hapticTransient,
                                  parameters: [fizzIntensity, fizzSharpness],
-                                 relativeTime: 0.01)
+                                 relativeTime: 0.02)
 
         do {
             let pattern = try CHHapticPattern(events: [thud, fizz], parameters: [])
