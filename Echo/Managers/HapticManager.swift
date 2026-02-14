@@ -1,5 +1,6 @@
 import Foundation
 import CoreHaptics
+import Combine
 
 // MARK: - HapticManager
 
@@ -40,6 +41,9 @@ final class HapticManager: ObservableObject {
     /// - Note: This will be `false` on the Simulator and some iPad models.
     let supportsHaptics: Bool
 
+    /// Subscription to `RhythmEvent` stream from `AudioManager`.
+    private var rhythmCancellable: AnyCancellable?
+
     // MARK: - Initialization
 
     /// Private to enforce singleton usage.
@@ -66,6 +70,9 @@ final class HapticManager: ObservableObject {
             print("HapticManager: ⚠️ Failed to start haptic engine – \(error.localizedDescription)")
             engine = nil
         }
+
+        // Subscribe to the global rhythm event stream.
+        subscribeToRhythmEvents()
     }
 
     // MARK: - Public API
@@ -76,49 +83,55 @@ final class HapticManager: ObservableObject {
         _ = prepareEngineIfNeeded() || true
     }
 
-    /// Plays a single beat-aligned vibration whose **texture** is determined
-    /// by audio frequency and amplitude.
+    /// Legacy API: plays a beat-aligned vibration from frequency & intensity.
     ///
-    /// - Parameters:
-    ///   - frequency: A normalized spectral centroid (`0.0 ... 1.0`).
-    ///     - `0.0` → low/bass → dull, heavy rumble.
-    ///     - `1.0` → high/treble → crisp, sharp click.
-    ///   - intensity: A normalized loudness / amplitude (`0.0 ... 1.0`).
-    ///
-    /// Internally this maps:
-    /// - `frequency` → `CHHapticEventParameterID.hapticSharpness`
-    /// - `intensity` → `CHHapticEventParameterID.hapticIntensity`
-    ///
-    /// The event type is `.hapticTransient` so it feels like a clear beat hit.
+    /// This now routes into the structured `HapticPatternLibrary` by
+    /// approximating a rhythm type from the frequency band:
+    /// - low  (0.0 ..< 0.33)  → `kick`
+    /// - mid  (0.33 ..< 0.66) → `snare`
+    /// - high (0.66 ... 1.0)  → `hihat`
     func playDynamicVibration(frequency: Float, intensity: Float) {
+        let clampedFrequency = Self.clamp(frequency)
+        let type: RhythmType
+        switch clampedFrequency {
+        case ..<0.33:
+            type = .kick
+        case ..<0.66:
+            type = .snare
+        default:
+            type = .hihat
+        }
+        play(patternFor: type, baseIntensity: intensity)
+    }
+
+    /// Plays a structured rhythm pattern from the shared library.
+    func play(patternFor type: RhythmType, baseIntensity: Float = 1.0) {
         guard prepareEngineIfNeeded() else {
             simulateHaptic()
             return
         }
 
-        // Map frequency to sharpness — keep a small floor so even bass hits
-        // feel present, not completely mushy.
-        let clampedFrequency = Self.clamp(frequency)
-        let sharpnessValue: Float = max(0.1, clampedFrequency)
-
-        let clampedIntensity = Self.clamp(intensity)
-
-        let sharpnessParam = CHHapticEventParameter(parameterID: .hapticSharpness,
-                                                    value: sharpnessValue)
-        let intensityParam = CHHapticEventParameter(parameterID: .hapticIntensity,
-                                                    value: clampedIntensity)
-
-        let event = CHHapticEvent(eventType: .hapticTransient,
-                                  parameters: [sharpnessParam, intensityParam],
-                                  relativeTime: 0)
-
         do {
-            let pattern = try CHHapticPattern(events: [event], parameters: [])
+            let pattern = try HapticPatternLibrary.pattern(for: type,
+                                                           baseIntensity: baseIntensity)
             let player = try engine?.makePlayer(with: pattern)
             try player?.start(atTime: 0)
         } catch {
-            print("HapticManager: ⚠️ Failed to play dynamic vibration – \(error.localizedDescription)")
+            print("HapticManager: ⚠️ Failed to play pattern \(type) – \(error.localizedDescription)")
         }
+    }
+
+    /// Subscribes to `AudioManager`'s published `RhythmEvent` stream and plays
+    /// the corresponding haptic pattern for each event.
+    private func subscribeToRhythmEvents() {
+        rhythmCancellable = AudioManager.shared.$lastRhythmEvent
+            .compactMap { $0 }
+            .sink { [weak self] event in
+                guard let self else { return }
+                let globalScale = AudioManager.shared.intensityMultiplier
+                let scaledIntensity = max(0.0, min(event.intensity * globalScale, 1.0))
+                self.play(patternFor: event.type, baseIntensity: scaledIntensity)
+            }
     }
 
     /// Plays one of the educational \"texture\" examples used in the Texture Lab.
@@ -140,6 +153,12 @@ final class HapticManager: ObservableObject {
             playRoughTexture()
         case .sharp:
             playSharpTexture()
+        case .deepPulse, .sharpTap, .rapidTexture, .softWave:
+            // New Texture Lab textures are handled by TextureLabEngine
+            // This method is for legacy textures only
+            break
+        case .none:
+            break
         }
     }
 

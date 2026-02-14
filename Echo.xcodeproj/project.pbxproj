@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		021B56062F3727CB00C6BF56 /* GallaudetRegular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 021B56052F3727CB00C6BF56 /* GallaudetRegular.ttf */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		024A518B2F35D9E500416DE0 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,15 +28,45 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		021B56052F3727CB00C6BF56 /* GallaudetRegular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = GallaudetRegular.ttf; sourceTree = "<group>"; };
 		024A517D2F35D9E300416DE0 /* Echo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Echo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		024A518A2F35D9E500416DE0 /* EchoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EchoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		024A51942F35D9E500416DE0 /* EchoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EchoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		024A520A2F35FCB700416DE0 /* Echo.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Echo.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		021B56082F37283F00C6BF56 /* Exceptions for "Echo" folder in "Echo" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 024A517C2F35D9E300416DE0 /* Echo */;
+		};
+		024A52EE2F3602CF00416DE0 /* Exceptions for "Echo" folder in "EchoTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				DemoTrack.mp3,
+			);
+			target = 024A51892F35D9E500416DE0 /* EchoTests */;
+		};
+		024A52EF2F3602CF00416DE0 /* Exceptions for "Echo" folder in "EchoUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				DemoTrack.mp3,
+			);
+			target = 024A51932F35D9E500416DE0 /* EchoUITests */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		024A517F2F35D9E300416DE0 /* Echo */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				021B56082F37283F00C6BF56 /* Exceptions for "Echo" folder in "Echo" target */,
+				024A52EE2F3602CF00416DE0 /* Exceptions for "Echo" folder in "EchoTests" target */,
+				024A52EF2F3602CF00416DE0 /* Exceptions for "Echo" folder in "EchoUITests" target */,
+			);
 			path = Echo;
 			sourceTree = "<group>";
 		};
@@ -80,6 +114,7 @@
 				024A518D2F35D9E500416DE0 /* EchoTests */,
 				024A51972F35D9E500416DE0 /* EchoUITests */,
 				024A517E2F35D9E300416DE0 /* Products */,
+				021B56052F3727CB00C6BF56 /* GallaudetRegular.ttf */,
 			);
 			sourceTree = "<group>";
 		};
@@ -226,6 +261,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				021B56062F3727CB00C6BF56 /* GallaudetRegular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -412,6 +448,7 @@
 				DEVELOPMENT_TEAM = UFWLT64PGT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Echo/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -440,6 +477,7 @@
 				DEVELOPMENT_TEAM = UFWLT64PGT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Echo/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

@@ -15,7 +15,12 @@ struct RhythmGameView: View {
             let maxRadius = size * 0.45
 
             ZStack {
-                Color.black.ignoresSafeArea()
+                // Background with fluid effect
+                FluidBackgroundView(
+                    type: .aurora,
+                    amplitude: Double(audioManager.amplitude)
+                )
+                .ignoresSafeArea()
 
                 // Ripples for active beats.
                 ForEach(engine.getActiveBeats()) { beat in
@@ -27,29 +32,102 @@ struct RhythmGameView: View {
                     )
 
                     Circle()
-                        .stroke(Color.white.opacity(0.55), lineWidth: 2)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.7),
+                                    Color.white.opacity(0.3),
+                                    Color.clear
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 2.5
+                        )
                         .frame(width: radius * 2, height: radius * 2)
                         .position(center)
+                        .blur(radius: 1)
                 }
 
-                // Target zone.
+                // Target zone in glass card.
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    targetStrokeColor.opacity(0.2),
+                                    targetStrokeColor.opacity(0.05),
+                                    .clear
+                                ],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: targetRadius
+                            )
+                        )
+                        .frame(width: targetRadius * 2, height: targetRadius * 2)
+                    
                 Circle()
-                    .stroke(targetStrokeColor, lineWidth: 5)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    targetStrokeColor.opacity(0.9),
+                                    targetStrokeColor.opacity(0.6)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 4
+                        )
                     .frame(width: targetRadius * 2, height: targetRadius * 2)
+                }
                     .position(center)
-                    .shadow(color: targetStrokeColor.opacity(0.7), radius: 12)
-                    .animation(.easeInOut(duration: 0.12), value: engine.lastJudgement)
+                .shadow(color: targetStrokeColor.opacity(0.8), radius: 20)
+                .animation(.spring(response: 0.2, dampingFraction: 0.8), value: engine.lastJudgement)
 
-                // HUD: score + combo
+                // HUD: score + combo in floating glass card
                 VStack {
-                    HStack {
-                        Text("Score \(engine.score)")
-                        Spacer()
-                        Text("Combo \(engine.currentCombo)×")
+                    HStack(spacing: 20) {
+                        // Score card
+                        VStack(spacing: 4) {
+                            Text("Score")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.white.opacity(0.7))
+                            
+                            Text("\(engine.score)")
+                                .font(.title2.weight(.bold))
+                                .foregroundStyle(.white)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .glass(cornerRadius: 20, opacity: 0.22)
+                        
+                        // Combo card
+                        VStack(spacing: 4) {
+                            Text("Combo")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.white.opacity(0.7))
+                            
+                            Text("\(engine.currentCombo)×")
+                                .font(.title2.weight(.bold))
+                                .foregroundStyle(
+                                    engine.currentCombo > 0
+                                    ? LinearGradient(
+                                        colors: [.cyan, .purple],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                    : LinearGradient(
+                                        colors: [.white, .white],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .glass(cornerRadius: 20, opacity: 0.22)
                     }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, 20)
                     .padding(.top, 20)
 
                     Spacer()
@@ -58,6 +136,14 @@ struct RhythmGameView: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 engine.userDidTap()
+            }
+            // 👇 CRITICAL FIX: Auto-start music so the game timeline moves
+            .onAppear {
+                audioManager.stop() // Reset to 0
+                audioManager.play()
+            }
+            .onDisappear {
+                audioManager.stop()
             }
         }
     }
@@ -97,4 +183,3 @@ struct RhythmGameView: View {
     RhythmGameView()
         .preferredColorScheme(.dark)
 }
-

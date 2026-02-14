@@ -5,6 +5,12 @@ enum TextureType: String, CaseIterable, Identifiable {
     case smooth
     case rough
     case sharp
+    // New Texture Lab textures
+    case deepPulse
+    case sharpTap
+    case rapidTexture
+    case softWave
+    case none  // For grid cells
 
     var id: String { rawValue }
 
@@ -14,6 +20,23 @@ enum TextureType: String, CaseIterable, Identifiable {
         case .smooth: return "Smooth"
         case .rough:  return "Rough"
         case .sharp:  return "Sharp"
+        case .deepPulse: return "Deep Pulse"
+        case .sharpTap: return "Sharp Tap"
+        case .rapidTexture: return "Rapid Texture"
+        case .softWave: return "Soft Wave"
+        case .none: return "None"
+        }
+    }
+    
+    /// Returns the next texture in the cycle (for grid cell cycling)
+    func next() -> TextureType {
+        switch self {
+        case .none: return .deepPulse
+        case .deepPulse: return .sharpTap
+        case .sharpTap: return .rapidTexture
+        case .rapidTexture: return .softWave
+        case .softWave: return .none
+        default: return .none
         }
     }
 }

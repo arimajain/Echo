@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import Combine
 
 // MARK: - VisualRhythmManager
 
@@ -76,9 +77,14 @@ final class VisualRhythmManager: ObservableObject {
     /// A cancellable work item that turns the torch off after ``torchFlashDuration``.
     private var torchOffWork: DispatchWorkItem?
 
+    /// Subscription to the global `RhythmEvent` stream.
+    private var rhythmCancellable: AnyCancellable?
+
     // MARK: - Initialization
 
-    private init() {}
+    private init() {
+        subscribeToRhythmEvents()
+    }
 
     // MARK: - Activation Flow
 
@@ -110,23 +116,50 @@ final class VisualRhythmManager: ObservableObject {
 
     // MARK: - Beat Processing
 
-    /// Evaluates the current audio amplitude and triggers visual effects
-    /// when thresholds are exceeded.
-    ///
-    /// Call this on every amplitude update from ``AudioManager``.
-    ///
-    /// - Parameter amplitude: The current RMS amplitude (`0.0 … 1.0`).
+    /// Legacy API retained for backwards compatibility; routes into the
+    /// event-based pipeline using a synthetic `kick` event.
     func processAmplitude(_ amplitude: Float) {
+        let event = RhythmEvent(timestamp: AudioManager.shared.currentTime,
+                                type: .kick,
+                                intensity: amplitude)
+        handle(event: event)
+    }
+
+    /// Subscribes to the shared `AudioManager` rhythm event stream.
+    private func subscribeToRhythmEvents() {
+        rhythmCancellable = AudioManager.shared.$lastRhythmEvent
+            .compactMap { $0 }
+            .sink { [weak self] event in
+                self?.handle(event: event)
+            }
+    }
+
+    /// Handles a single `RhythmEvent` and decides which visual effects to fire.
+    private func handle(event: RhythmEvent) {
         guard isActive else { return }
 
-        // ── Torch flash on loud peaks ───────────────────────────────────
-        if amplitude > torchThreshold {
-            flashTorch()
-        }
+        let energy = event.intensity
 
-        // ── Particle burst on snare-level peaks ─────────────────────────
-        if amplitude > particleThreshold {
-            triggerParticleBurst()
+        switch event.type {
+        case .kick, .drop:
+            if energy > torchThreshold {
+                flashTorch()
+            }
+            if energy > particleThreshold {
+                triggerParticleBurst()
+            }
+        case .snare:
+            if energy > particleThreshold * 0.9 {
+                triggerParticleBurst()
+            }
+        case .hihat:
+            // Light flicker: only particles, at a higher threshold to avoid noise.
+            if energy > particleThreshold * 1.1 {
+                triggerParticleBurst()
+            }
+        case .build:
+            // For now, rely on surrounding UI animations for \"build\" visuals.
+            break
         }
     }
 
