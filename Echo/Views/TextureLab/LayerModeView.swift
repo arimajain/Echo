@@ -1,10 +1,13 @@
 import SwiftUI
 
 /// Full-screen Layer mode for tactile blending.
-/// Simplified tap-to-add interaction.
+/// Drag-and-drop interaction: drag textures into orb to layer haptics.
 struct LayerModeView: View {
     @StateObject private var engine = LayerEngine()
     @State private var orbScale: CGFloat = 1.0
+    @State private var draggedTexture: TextureType? = nil
+    @State private var dragTranslation: CGSize = .zero   // visual offset for current drag
+    @State private var isDragging: Bool = false
     
     var body: some View {
         let _ = print("LayerModeView: 🎨 Body rendered")
@@ -13,70 +16,82 @@ struct LayerModeView: View {
             let orbCenterY = screenHeight * 0.35
             
             ZStack {
-                // Central orb (60% height area)
-                LayerOrbView(
-                    blendedColor: engine.blendedColor,
-                    glowIntensity: engine.glowIntensity,
-                    totalLayers: engine.totalLayers
+                // Central animated orb (60% height area) - Drop destination
+                AnimatedOrbView(
+                    hue: hueFromColor(engine.blendedColor),
+                    hoverIntensity: 0.2,
+                    rotateOnHover: true,
+                    forceHoverState: false,
+                    hapticsActive: engine.totalLayers > 0,
+                    backgroundColor: .black
                 )
                 .scaleEffect(orbScale)
                 .frame(maxWidth: .infinity)
                 .frame(height: screenHeight * 0.6)
                 .position(x: geometry.size.width / 2, y: orbCenterY)
-                .allowsHitTesting(false)
+                .allowsHitTesting(true)
+                
+                // Persistent chips for currently active textures (stay inside the orb while playing)
+                activeTokensOverlay(
+                    in: geometry,
+                    orbCenterY: orbCenterY
+                )
                 
                 VStack(spacing: 0) {
                     Spacer()
+                        .frame(minHeight: 100) // Ensure minimum spacing from orb
                     
                     // Hint text when no layers
                     if engine.totalLayers == 0 {
-                        Text("Tap textures below to layer haptics")
+                        Text("Drag textures into the orb to layer haptics")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.white.opacity(0.5))
+                            .padding(.top, 60)
                             .padding(.bottom, 20)
                     }
                     
                     // Texture tokens at bottom (40% height area)
                     HStack(spacing: 40) {
                         ForEach([TextureType.deepPulse, .sharpTap, .rapidTexture, .softWave], id: \.id) { texture in
-                            textureToken(for: texture)
+                            textureToken(for: texture, geometry: geometry)
                         }
                     }
                     .padding(.bottom, 60)
                     
-                    // Clear button when layers are active
-                    if engine.totalLayers > 0 {
-                        Button(action: {
-                            engine.clearAll()
-                            triggerOrbPulse()
-                        }) {
-                            Text("Clear All")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.7))
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 8)
-                                .background(
-                                    Capsule()
-                                        .fill(.white.opacity(0.1))
-                                        .overlay(
-                                            Capsule()
-                                                .stroke(.white.opacity(0.2), lineWidth: 1)
-                                        )
-                                )
-                        }
-                        .padding(.top, 20)
-                        .padding(.bottom, 40)
+                    // Clear button area – fixed height so tokens never shift vertically.
+                    Button(action: {
+                        engine.clearAll()
+                        triggerOrbPulse()
+                    }) {
+                        Text("Clear All")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.white.opacity(engine.totalLayers > 0 ? 0.9 : 0.35))
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(.white.opacity(engine.totalLayers > 0 ? 0.12 : 0.04))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(.white.opacity(engine.totalLayers > 0 ? 0.25 : 0.08), lineWidth: 1)
+                                    )
+                            )
                     }
+                    .disabled(engine.totalLayers == 0)
+                    .frame(height: 40)
+                    .padding(.top, 20)
+                    .padding(.bottom, 40)
                 }
+                // Extra top padding so bottom controls sit a bit higher, giving more space under the orb.
+                .padding(.top, 24)
             }
         }
     }
     
     @ViewBuilder
-    private func textureToken(for texture: TextureType) -> some View {
+    private func textureToken(for texture: TextureType, geometry: GeometryProxy) -> some View {
         let count = engine.count(for: texture)
         let color = colorForTexture(texture)
-        let canAdd = count < 3 && engine.totalLayers < 8
         
         ZStack {
             Circle()
@@ -102,36 +117,76 @@ struct LayerModeView: View {
             
             // Content
             if count > 0 {
-                VStack(spacing: 2) {
-                    Text("\(count)")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
-                    
-                    // Minus button overlay for removing
-                    Button(action: {
-                        engine.removeLayer(texture)
-                        triggerOrbPulse()
-                    }) {
-                        Image(systemName: "minus.circle.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.white.opacity(0.8))
-                    }
-                }
+                // Show a small count indicator only (no minus button here).
+                Text("×\(count)")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
             } else {
                 Image(systemName: iconName(for: texture))
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(color.opacity(0.8))
             }
         }
-        .onTapGesture {
-            print("LayerModeView: 👆 Texture token tapped: \(texture)")
-            if canAdd {
-                print("LayerModeView: ✅ Can add layer, calling engine.addLayer")
-                engine.addLayer(texture)
-                triggerOrbPulse()
-            } else {
-                print("LayerModeView: ⚠️ Cannot add layer - count: \(count), total: \(engine.totalLayers)")
-            }
+        .offset(dragOffset(for: texture))
+        .gesture(
+            DragGesture(minimumDistance: 5)
+                .onChanged { value in
+                    // Start drag for this texture
+                    if !isDragging {
+                        isDragging = true
+                        draggedTexture = texture
+                    }
+                    // Only apply offset for the currently dragged texture
+                    if draggedTexture == texture {
+                        dragTranslation = value.translation
+                    }
+                }
+                .onEnded { _ in
+                    // On drop, add layer (if within limits), then reset offset
+                    if draggedTexture == texture {
+                        let count = engine.count(for: texture)
+                        if count < 3 && engine.totalLayers < 8 {
+                            engine.addLayer(texture)
+                            triggerOrbPulse()
+                            print("LayerModeView: ✅ Dropped \(texture.displayName) (simplified hit-test)")
+                        } else {
+                            print("LayerModeView: ⚠️ Cannot add layer - count: \(count), total: \(engine.totalLayers)")
+                        }
+                    }
+                    dragTranslation = .zero
+                    draggedTexture = nil
+                    isDragging = false
+                }
+        )
+    }
+    
+    @ViewBuilder
+    private func textureTokenPreview(for texture: TextureType) -> some View {
+        let color = colorForTexture(texture)
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            color.opacity(0.8),
+                            color.opacity(0.4),
+                            color.opacity(0.2)
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 30
+                    )
+                )
+                .frame(width: 60, height: 60)
+                .overlay(
+                    Circle()
+                        .stroke(color.opacity(0.6), lineWidth: 2)
+                )
+                .shadow(color: color.opacity(0.5), radius: 12)
+            
+            Image(systemName: iconName(for: texture))
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(color.opacity(0.9))
         }
     }
     
@@ -154,6 +209,112 @@ struct LayerModeView: View {
         }
     }
     
+    @ViewBuilder
+    private func activeTokensOverlay(in geometry: GeometryProxy, orbCenterY: CGFloat) -> some View {
+        let active: [(TextureType, Int)] = [
+            (.deepPulse, engine.count(for: .deepPulse)),
+            (.sharpTap, engine.count(for: .sharpTap)),
+            (.rapidTexture, engine.count(for: .rapidTexture)),
+            (.softWave, engine.count(for: .softWave))
+        ].filter { $0.1 > 0 }
+        
+        let center = CGPoint(x: geometry.size.width / 2, y: orbCenterY)
+        // Slightly larger radius to cover more of the orb
+        let radius: CGFloat = active.count <= 1 ? 0 : 80
+        
+        ZStack {
+            ForEach(Array(active.enumerated()), id: \.offset) { idx, item in
+                let texture = item.0
+                let count = item.1
+                let position = activeTokenPosition(
+                    index: idx,
+                    total: active.count,
+                    center: center,
+                    radius: radius
+                )
+                
+                activeChip(for: texture, count: count)
+                    .position(position)
+            }
+        }
+    }
+    
+    /// Returns the current drag offset for a given texture token
+    private func dragOffset(for texture: TextureType) -> CGSize {
+        guard isDragging, let draggedTexture, draggedTexture == texture else {
+            return .zero
+        }
+        return dragTranslation
+    }
+    
+    // MARK: - Chip Helpers
+    
+    @ViewBuilder
+    private func activeChip(for texture: TextureType, count: Int) -> some View {
+        let baseColor = colorForTexture(texture)
+        let icon = iconName(for: texture)
+        
+        HStack(spacing: 8) {
+            // Remove button
+            Button(action: {
+                engine.removeLayer(texture)
+                triggerOrbPulse()
+            }) {
+                ZStack {
+                    Circle()
+                        .fill(Color.black.opacity(0.9))
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 16, height: 16)
+            }
+            .buttonStyle(.plain)
+            
+            // Icon + optional count (no text label)
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                
+                if count > 1 {
+                    Text("×\(count)")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+            }
+            .padding(.trailing, 4)
+        }
+        .padding(.vertical, 9)
+        .padding(.horizontal, 8)
+        // Slightly taller, a bit narrower capsule
+        .frame(height: 40)
+        .background(
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            baseColor.opacity(0.95),
+                            baseColor.opacity(0.75)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .shadow(color: baseColor.opacity(0.65), radius: 16, x: 0, y: 6)
+    }
+    
+    /// Positions chips around a ring inside the orb.
+    private func activeTokenPosition(index: Int, total: Int, center: CGPoint, radius: CGFloat) -> CGPoint {
+        guard total > 1 else { return center }
+        let angle = (Double(index) / Double(total)) * (2.0 * Double.pi) - Double.pi / 2.0
+        return CGPoint(
+            x: center.x + radius * CGFloat(cos(angle)),
+            y: center.y + radius * CGFloat(sin(angle))
+        )
+    }
+    
     private func iconName(for texture: TextureType) -> String {
         switch texture {
         case .deepPulse: return "waveform.path"
@@ -162,5 +323,17 @@ struct LayerModeView: View {
         case .softWave: return "waveform"
         default: return "circle"
         }
+    }
+    
+    /// Converts a SwiftUI Color to hue value (0-360 degrees)
+    private func hueFromColor(_ color: Color) -> Float {
+        let uiColor = UIColor(color)
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        
+        uiColor.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        return Float(hue * 360.0)
     }
 }

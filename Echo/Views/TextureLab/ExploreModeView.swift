@@ -144,7 +144,7 @@ struct ExploreModeView: View {
         case .deepPulse: return 0.25
         case .sharpTap: return 0.06
         case .rapidTexture: return 0.15
-        case .softWave: return 0.5
+        case .softWave: return 0.6
         default: return 0.3
         }
     }
