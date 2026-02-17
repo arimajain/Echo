@@ -42,8 +42,7 @@ final class AudioManager: ObservableObject {
 
     /// Current playback time (in seconds) for the loaded track.
     ///
-    /// This is used by game logic (e.g. `RhythmGameEngine`) to align visual
-    /// targets with the audio timeline.
+    /// Used to align visual elements with the audio timeline.
     @Published private(set) var currentTime: Double = 0.0
 
     /// Normalized playback progress (`0.0` at start, `1.0` at end).
@@ -77,13 +76,13 @@ final class AudioManager: ObservableObject {
 
     /// Frequency bands normalized to `0.0 ... 1.0` for visualizers.
     ///
-    /// 24 bands evenly distributed across the frequency spectrum:
+    /// 32 bands evenly distributed across the frequency spectrum:
     /// - Band 0: Lowest frequencies (~20-200 Hz)
-    /// - Band 23: Highest frequencies (~8kHz+)
+    /// - Band 31: Highest frequencies (~8kHz+)
     ///
     /// Updated in real-time during playback. Values are smoothed and normalized
     /// from raw FFT magnitude data.
-    @Published private(set) var frequencyBands: [Float] = Array(repeating: 0.0, count: 24)
+    @Published private(set) var frequencyBands: [Float] = Array(repeating: 0.0, count: 32)
 
     /// Currently selected track.
     @Published private(set) var currentTrack: Track?
@@ -128,6 +127,13 @@ final class AudioManager: ObservableObject {
 
     /// Duration of the loaded audio file in seconds.
     private var trackDuration: Double = 0.0
+    
+    // MARK: - Performance Optimization
+    
+    /// Throttle frequency band updates to reduce main thread load.
+    /// Only update UI every N buffers (target ~30fps for visualizer).
+    private var frequencyBandUpdateCounter: Int = 0
+    private let frequencyBandUpdateInterval: Int = 2  // Update every 2 buffers (~30fps)
 
     // MARK: - Frequency Analysis (FFT)
 
@@ -148,13 +154,13 @@ final class AudioManager: ObservableObject {
     private var midBandRange: ClosedRange<Int> = 0...0      // ~150–2500 Hz
     private var highBandRange: ClosedRange<Int> = 0...0     // 2500+ Hz
 
-    /// Frequency band ranges for EchoLineSurface visualization (24 bands).
+    /// Frequency band ranges for EchoLineSurface visualization (32 bands).
     /// Computed during FFT setup based on sample rate.
     private var visualizerBandRanges: [ClosedRange<Int>] = []
     
     /// Rolling reference for normalization to prevent compression.
     /// Tracks the maximum energy seen in recent frames for each band.
-    private var bandMaxHistory: [Float] = Array(repeating: 0.0, count: 24)
+    private var bandMaxHistory: [Float] = Array(repeating: 0.0, count: 32)
     private var bandMaxDecay: Float = 0.995  // Slow decay to maintain reference
 
     /// Simple spike detection state for each band.
@@ -397,7 +403,7 @@ final class AudioManager: ObservableObject {
 
         // --- Frequency-domain analysis for rhythm classification -------------
         var detectedEvent: (RhythmType, Float)?
-        var visualizerBands: [Float] = Array(repeating: 0.0, count: 24)
+        var visualizerBands: [Float] = Array(repeating: 0.0, count: 32)
 
         if fftInitialized,
            frameCount >= fftSize {
@@ -479,10 +485,10 @@ final class AudioManager: ObservableObject {
                 let midEnergy = bandEnergy(in: midBandRange)
                 let highEnergy = bandEnergy(in: highBandRange)
 
-                // Compute 24 frequency bands for EchoLineSurface.
-                if !visualizerBandRanges.isEmpty && visualizerBandRanges.count == 24 {
+                // Compute 32 frequency bands for EchoLineSurface.
+                if !visualizerBandRanges.isEmpty && visualizerBandRanges.count == 32 {
                     for (index, range) in visualizerBandRanges.enumerated() {
-                        guard index < 24 else { break }
+                        guard index < 32 else { break }
                         let energy = bandEnergy(in: range)
                         visualizerBands[index] = energy
                         
@@ -519,7 +525,7 @@ final class AudioManager: ObservableObject {
                         print("AudioManager: 📊 Max history (first 8): [\(maxStr)...]")
                     }
                 } else {
-                    visualizerBands = Array(repeating: 0.0, count: 24)
+                    visualizerBands = Array(repeating: 0.0, count: 32)
                     if fftProcessCount % 100 == 0 {
                         print("AudioManager: ⚠️ Visualizer band ranges not initialized")
                     }
@@ -571,9 +577,14 @@ final class AudioManager: ObservableObject {
                 self.emitRhythmEvent(type: type, intensity: intensity)
             }
             
-            // Update frequency bands for visualizers.
-            if !visualizerBands.isEmpty {
-                self.frequencyBands = visualizerBands
+            // Throttle frequency band updates to reduce main thread load
+            // Only update UI every N buffers (target ~30fps for visualizer)
+            self.frequencyBandUpdateCounter += 1
+            if self.frequencyBandUpdateCounter >= self.frequencyBandUpdateInterval {
+                self.frequencyBandUpdateCounter = 0
+                if !visualizerBands.isEmpty {
+                    self.frequencyBands = visualizerBands
+                }
             }
         }
     }
@@ -658,11 +669,11 @@ final class AudioManager: ObservableObject {
 
         print("AudioManager: 🔧 Rhythm bands - Low: \(lowBandRange), Mid: \(midBandRange), High: \(highBandRange)")
 
-        // Compute 24 evenly-spaced frequency bands for EchoLineSurface.
+        // Compute 32 evenly-spaced frequency bands for EchoLineSurface.
         // Frequency range: ~20 Hz to Nyquist (typically ~22kHz)
         let minFreq: Double = 20.0
         let maxFreq: Double = nyquist
-        let numBands = 24
+        let numBands = 32
         let freqStep = (maxFreq - minFreq) / Double(numBands)
         
         visualizerBandRanges = (0..<numBands).map { bandIndex in
@@ -849,10 +860,13 @@ final class AudioManager: ObservableObject {
     private func startTimeTimer() {
         timeTimer?.invalidate()
 
-        timeTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0,
+        // Reduced from 60fps to 10fps - sufficient for time display and reduces CPU load
+        timeTimer = Timer.scheduledTimer(withTimeInterval: 0.1,
                                          repeats: true) { [weak self] _ in
             guard let self else { return }
-            self.updateCurrentTime()
+            Task { @MainActor in
+                self.updateCurrentTime()
+            }
         }
     }
 
@@ -920,9 +934,9 @@ final class AudioManager: ObservableObject {
                 
                 time += 0.016  // ~60fps
                 
-                // Generate synthetic frequency bands with varying patterns (24 bands)
+                // Generate synthetic frequency bands with varying patterns (32 bands)
                 var bands: [Float] = []
-                for i in 0..<24 {
+                for i in 0..<32 {
                     // Create different patterns for each band
                     let baseFreq = Float(i) * 0.08 + 0.1
                     let variation = sin(time * baseFreq * 2.0) * 0.5 + 0.5

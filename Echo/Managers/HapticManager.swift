@@ -116,6 +116,7 @@ final class HapticManager: ObservableObject {
                                                            baseIntensity: baseIntensity)
             let player = try engine?.makePlayer(with: pattern)
             try player?.start(atTime: 0)
+            print("🎵 HAPTIC: [Rhythm Pattern] - \(type) (Intensity: \(String(format: "%.2f", baseIntensity)))")
         } catch {
             print("HapticManager: ⚠️ Failed to play pattern \(type) – \(error.localizedDescription)")
         }
@@ -217,6 +218,7 @@ final class HapticManager: ObservableObject {
             let pattern = try CHHapticPattern(events: [thud, fizz], parameters: [])
             let player = try engine?.makePlayer(with: pattern)
             try player?.start(atTime: 0)
+            print("🎵 HAPTIC: [Complex Pattern] - Thud + Fizz")
         } catch {
             print("HapticManager: ⚠️ Failed to play complex pattern – \(error.localizedDescription)")
         }
@@ -283,6 +285,57 @@ final class HapticManager: ObservableObject {
     /// Clamps a normalized `Float` into the `0.0 ... 1.0` range.
     private static func clamp(_ value: Float) -> Float {
         max(0.0, min(1.0, value))
+    }
+    
+    // MARK: - Texture Lab API
+    
+    /// Plays a texture pattern from Texture Lab.
+    /// Uses the shared engine instance for optimal performance.
+    ///
+    /// - Parameter pattern: The Core Haptics pattern to play
+    /// - Parameter name: Optional name for debug logging (default: "Unknown")
+    /// - Returns: `true` if the pattern was played successfully, `false` otherwise
+    func playTexturePattern(_ pattern: CHHapticPattern, name: String = "Unknown") -> Bool {
+        guard supportsHaptics, let engine = engine else {
+            print("🎵 HAPTIC: [\(name)] - Device doesn't support haptics")
+            return false
+        }
+        
+        // Ensure engine is running
+        guard prepareEngineIfNeeded() else {
+            print("🎵 HAPTIC: [\(name)] - Engine not ready")
+            return false
+        }
+        
+        do {
+            let player = try engine.makePlayer(with: pattern)
+            try player.start(atTime: CHHapticTimeImmediate)
+            print("🎵 HAPTIC: [\(name)] - Playing")
+            return true
+        } catch {
+            print("HapticManager: ⚠️ Failed to play texture pattern [\(name)] – \(error.localizedDescription)")
+            return false
+        }
+    }
+    
+    /// Stops any currently playing texture pattern from Texture Lab.
+    /// This is safe to call even if no pattern is playing.
+    func stopTexturePattern() {
+        guard let texturePlayer else { return }
+        do {
+            try texturePlayer.stop(atTime: CHHapticTimeImmediate)
+        } catch {
+            print("HapticManager: ⚠️ Failed to stop texture pattern – \(error.localizedDescription)")
+        }
+        self.texturePlayer = nil
+    }
+    
+    /// Returns the shared haptic engine for direct use (when needed for advanced patterns).
+    /// The engine is already initialized and started on app launch.
+    var sharedEngine: CHHapticEngine? {
+        guard supportsHaptics else { return nil }
+        _ = prepareEngineIfNeeded()
+        return engine
     }
 
     // MARK: - Texture Implementations

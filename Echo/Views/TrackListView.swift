@@ -23,26 +23,6 @@ struct TrackListView: View {
                 
                 ScrollView {
                     VStack(spacing: 20) {
-                        // Header
-                        VStack(spacing: 12) {
-                            RGBGlitchText(
-                                text: "ECHO",
-                                font: .system(
-                                    size: 56,
-                                    weight: .black,
-                                    design: .rounded
-                                ),
-                                amplitude: 0.15
-                            )
-                            .shadow(color: .black.opacity(0.6), radius: 14, y: 6)
-                            
-                            Text("Select a track to begin")
-                                .font(.system(size: 18, weight: .medium, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.8))
-                        }
-                        .padding(.top, 40)
-                        .padding(.bottom, 20)
-                        
                         // Track list
                         VStack(spacing: 16) {
                             ForEach(audioManager.availableTracks) { track in
@@ -65,7 +45,7 @@ struct TrackListView: View {
                                         .font(.headline.weight(.semibold))
                                         .foregroundStyle(.white)
                                     
-                                    Text("Texture Lab, Game Mode, Beat Recorder & more")
+                                    Text("Texture Lab, Line Visualizer & more")
                                         .font(.caption)
                                         .foregroundStyle(.white.opacity(0.7))
                                 }

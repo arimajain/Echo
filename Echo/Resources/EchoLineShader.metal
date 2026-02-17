@@ -41,7 +41,7 @@ fragment float4 echo_line_fragment(
     float2 uv = in.uv;
     float2 resolution = uResolution;
 
-    const int numLines = 24;
+        const int numLines = 32;
     float spacing = 1.0 / float(numLines + 1);
 
     float3 color = float3(0.0);

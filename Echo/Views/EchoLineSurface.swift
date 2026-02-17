@@ -119,8 +119,8 @@ struct EchoLineSurface: UIViewRepresentable {
         var resolution: SIMD2<Float> = SIMD2<Float>(1, 1)
         var lastTime: CFTimeInterval = 0
         
-        // Amplitude smoothing state (24 bands)
-        var smoothedBands: [Float] = Array(repeating: 0.0, count: 24)
+        // Amplitude smoothing state (32 bands)
+        var smoothedBands: [Float] = Array(repeating: 0.0, count: 32)
         var currentMode: RenderingMode = .calm
         var isActive: Bool = true
         
@@ -214,11 +214,11 @@ struct EchoLineSurface: UIViewRepresentable {
         
         /// Applies amplitude smoothing: A_smoothed = previous * decay + newValue * (1 - decay)
         private func updateSmoothedBands(newBands: [Float]) {
-            guard newBands.count == 24 else { return }
+            guard newBands.count == 32 else { return }
             let decay = currentMode.decay
             let oneMinusDecay = 1.0 - decay
             
-            for i in 0..<24 {
+            for i in 0..<32 {
                 smoothedBands[i] = smoothedBands[i] * decay + newBands[i] * oneMinusDecay
             }
             // Debug: Print band values occasionally to verify they're updating
@@ -273,7 +273,7 @@ struct EchoLineSurface: UIViewRepresentable {
             var waveAmplitude: Float = 1.0
             var opacityValue = opacity
             
-            renderEncoder.setFragmentBytes(&bandAmplitudes, length: MemoryLayout<Float>.size * 24, index: 0)
+            renderEncoder.setFragmentBytes(&bandAmplitudes, length: MemoryLayout<Float>.size * 32, index: 0)
             renderEncoder.setFragmentBytes(&timeValue, length: MemoryLayout<Float>.size, index: 1)
             renderEncoder.setFragmentBytes(&resolutionValue, length: MemoryLayout<SIMD2<Float>>.size, index: 2)
             renderEncoder.setFragmentBytes(&baseThickness, length: MemoryLayout<Float>.size, index: 3)

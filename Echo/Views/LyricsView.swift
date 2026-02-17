@@ -109,18 +109,8 @@ struct LyricsView: View {
     
     /// Detects and loads the custom Sign Language font.
     private func detectSignLanguageFont() {
-        // Common Sign Language font names to try
-        let possibleNames = [
-            "Gallaudet",
-            "Gallaudet-Regular",
-            "GallaudetRegular",
-            "SignLanguage",
-            "ASL",
-            "AmericanSignLanguage"
-        ]
-        
         // First, try the most likely name
-        if let font = UIFont(name: "Gallaudet", size: 60) {
+        if let _ = UIFont(name: "Gallaudet", size: 60) {
             signFontName = "Gallaudet"
             signFontAvailable = true
             print("LyricsView: ✅ Found Sign Language font: Gallaudet")
@@ -137,7 +127,7 @@ struct LyricsView: View {
                 if lowerName.contains("gallaudet") ||
                    lowerName.contains("sign") ||
                    lowerName.contains("asl") {
-                    if let font = UIFont(name: name, size: 60) {
+                    if let _ = UIFont(name: name, size: 60) {
                         signFontName = name
                         signFontAvailable = true
                         print("LyricsView: ✅ Found Sign Language font: \(name) (family: \(family))")
@@ -219,9 +209,14 @@ struct LyricsView: View {
 #Preview {
     ZStack {
         // Background
-        FluidBackgroundView(
-            type: .aurora,
-            amplitude: 0.3
+        // Simple gradient background
+        LinearGradient(
+            colors: [
+                Color(red: 0.05, green: 0.05, blue: 0.15),
+                Color(red: 0.1, green: 0.05, blue: 0.2)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
         

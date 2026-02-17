@@ -4,7 +4,7 @@ import SwiftUI
 ///
 /// Links the audio amplitude to:
 /// - Background radial gradient (color temperature).
-/// - `RGBGlitchText` hero title.
+/// - Hero title.
 /// - Core Haptics via ``HapticManager``.
 struct ContentView: View {
 
@@ -20,12 +20,6 @@ struct ContentView: View {
 
     /// Visual Rhythm Mode manager (screen pulses + torch effects).
     @StateObject private var visualRhythmManager = VisualRhythmManager.shared
-
-    /// Fluid background manager (states of matter visualizer).
-    @StateObject private var fluidManager = FluidBackgroundManager.shared
-
-    /// Current fluid mode for the background.
-    @State private var currentFluidMode: FluidType = .aurora
 
     /// Controls presentation of the launch-time accessibility hint bubble.
     @State private var showLaunchHint: Bool = true
@@ -67,16 +61,14 @@ struct ContentView: View {
                             
                             // Hero section: Track title in glass card.
                             VStack(spacing: 16) {
-                                RGBGlitchText(
-                                    text: audioManager.currentTrack?.name ?? "ECHO",
-                                    font: .system(
+                                Text(audioManager.currentTrack?.name ?? "ECHO")
+                                    .font(.system(
                                         size: heroFontSize(for: geometry.size),
                                         weight: .bold,
                                         design: .rounded
-                                    ),
-                                    amplitude: Double(audioManager.currentAmplitude)
-                                )
-                                .padding(.vertical, 8)
+                                    ))
+                                    .foregroundStyle(.white)
+                                    .padding(.vertical, 8)
                                 
                                 if let artist = audioManager.currentTrack?.artist {
                                     Text(artist)
@@ -155,28 +147,6 @@ struct ContentView: View {
                                             subtitle: "Learn haptic textures",
                                             systemImage: "waveform.path.badge.plus",
                                             color: .cyan
-                                        )
-                                    }
-                                    
-                                    NavigationLink {
-                                        RhythmGameView()
-                                    } label: {
-                                        navCard(
-                                            title: "Game Mode",
-                                            subtitle: "Rhythm challenge",
-                                            systemImage: "target",
-                                            color: .purple
-                                        )
-                                    }
-                                    
-                                    NavigationLink {
-                                        BeatRecorderView()
-                                    } label: {
-                                        navCard(
-                                            title: "Beat Recorder",
-                                            subtitle: "Capture beat timestamps",
-                                            systemImage: "record.circle",
-                                            color: .orange
                                         )
                                     }
                                     
@@ -511,17 +481,6 @@ struct ContentView: View {
         }
     }
 
-    /// Cycles to the next fluid mode (Aurora -> Magma -> Mercury -> Aurora).
-    private func cycleFluidMode() {
-        let allTypes = FluidType.allCases
-        guard let currentIndex = allTypes.firstIndex(of: currentFluidMode) else {
-            currentFluidMode = .aurora
-            return
-        }
-
-        let nextIndex = (currentIndex + 1) % allTypes.count
-        currentFluidMode = allTypes[nextIndex]
-    }
 
     // MARK: - Launch Hint
 
