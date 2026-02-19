@@ -13,8 +13,18 @@ struct LayerModeView: View {
         let _ = print("LayerModeView: 🎨 Body rendered")
         GeometryReader { geometry in
             let screenHeight = geometry.size.height
-            let orbCenterY = screenHeight * 0.35
-            
+            // Position orb slightly higher to create more room for bottom content
+            let orbCenterY = screenHeight * 0.32
+            // Slightly smaller orb height for a tighter look
+            let orbHeight = screenHeight * 0.58
+            let orbBottom = orbCenterY + (orbHeight / 2)
+            // Calculate spacer height: keep reasonable gap below orb,
+            // but also reserve space at the bottom for tokens + Clear All
+            let desiredTopOfHint = orbBottom + (screenHeight * 0.04) // ~4% of screen height below orb
+            let minBottomReserved: CGFloat = 260 // space for tokens + Clear All above bottom bar
+            let maxTopOfHint = max(0, screenHeight - minBottomReserved)
+            let spacerHeight = min(desiredTopOfHint, maxTopOfHint)
+                        
             ZStack {
                 // Central animated orb (60% height area) - Drop destination
                 AnimatedOrbView(
@@ -27,7 +37,7 @@ struct LayerModeView: View {
                 )
                 .scaleEffect(orbScale)
                 .frame(maxWidth: .infinity)
-                .frame(height: screenHeight * 0.6)
+                .frame(height: orbHeight)
                 .position(x: geometry.size.width / 2, y: orbCenterY)
                 .allowsHitTesting(true)
                 
@@ -37,18 +47,22 @@ struct LayerModeView: View {
                     orbCenterY: orbCenterY
                 )
                 
+                // Hint text inside the orb when no layers are active
+                if engine.totalLayers == 0 {
+                    Text("Drag textures into the orb\nand layer haptics")
+                        .font(.system(size: 14, weight: .medium))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .foregroundStyle(.white.opacity(0.7))
+                        .padding(.horizontal, 56)
+                        .position(x: geometry.size.width / 2, y: orbCenterY)
+                        .allowsHitTesting(false)
+                }
+                
                 VStack(spacing: 0) {
+                    // Spacer calculated to push content below orb with reasonable spacing
                     Spacer()
-                        .frame(minHeight: 100) // Ensure minimum spacing from orb
-                    
-                    // Hint text when no layers
-                    if engine.totalLayers == 0 {
-                        Text("Drag textures into the orb to layer haptics")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.5))
-                            .padding(.top, 60)
-                            .padding(.bottom, 20)
-                    }
+                        .frame(height: spacerHeight)
                     
                     // Texture tokens at bottom (40% height area)
                     HStack(spacing: 40) {
@@ -63,7 +77,7 @@ struct LayerModeView: View {
                         engine.clearAll()
                         triggerOrbPulse()
                     }) {
-                        Text("Clear All")
+                        Text("Clear")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.white.opacity(engine.totalLayers > 0 ? 0.9 : 0.35))
                             .padding(.horizontal, 20)
@@ -80,7 +94,7 @@ struct LayerModeView: View {
                     .disabled(engine.totalLayers == 0)
                     .frame(height: 40)
                     .padding(.top, 20)
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 72)
                 }
                 // Extra top padding so bottom controls sit a bit higher, giving more space under the orb.
                 .padding(.top, 24)
@@ -290,19 +304,52 @@ struct LayerModeView: View {
         // Slightly taller, a bit narrower capsule
         .frame(height: 40)
         .background(
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            baseColor.opacity(0.95),
-                            baseColor.opacity(0.75)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+            ZStack {
+                // Colored, liquid-glass base (tinted by texture color)
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                baseColor.opacity(0.85),
+                                baseColor.opacity(0.55)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                )
+                    .overlay(
+                        Capsule()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.55),
+                                        baseColor.opacity(0.9)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+                    .overlay(
+                        // Subtle inner highlight for "liquid" sheen
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.20),
+                                        Color.white.opacity(0.03)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .blendMode(.screen)
+                    )
+            }
         )
-        .shadow(color: baseColor.opacity(0.65), radius: 16, x: 0, y: 6)
+        // Softer glow so the blur radius isn't overwhelming
+        .shadow(color: baseColor.opacity(0.35), radius: 8, x: 0, y: 4)
     }
     
     /// Positions chips around a ring inside the orb.

@@ -5,16 +5,39 @@ import SwiftUI
 struct PatternBuilderModeView: View {
     @ObservedObject var engine: TextureLabEngine
     @State private var pattern = PatternModel(stepCount: 16)
-    @State private var tempo: Double = 120.0
+    @State private var tempo: Double = 70.0
     @State private var gridStepCount: Int = 16
+    @State private var showPresets = false
     
     var body: some View {
         VStack(spacing: 0) {
+            // Presets button above grid
+            HStack {
+                Spacer()
+                Button {
+                    showPresets = true
+                } label: {
+                    Text("Presets")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.white.opacity(0.1))
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                        )
+                        .clipShape(Capsule())
+                }
+                .padding(.trailing, 20)
+                .padding(.top, 8)
+            }
+            
             // Full-screen grid view (moved up, no title)
             PatternGridView(pattern: $pattern, stepCount: gridStepCount, engine: engine)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.horizontal, 20)
-                .padding(.top, 12) // Tighter spacing from segmented control
+                .padding(.top, 8)
             
             // Compact controls at bottom
             VStack(spacing: 16) {
@@ -45,6 +68,32 @@ struct PatternBuilderModeView: View {
             // Playback continues from same step position
             engine.setTempo(newValue)
         }
+        .sheet(isPresented: $showPresets) {
+            PresetSelectionView(
+                selectedPreset: { preset in
+                    applyPreset(preset)
+                    showPresets = false
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
+    }
+    
+    private func applyPreset(_ preset: BuilderPreset) {
+        // Replace current pattern with preset
+        withAnimation(.easeInOut(duration: 0.2)) {
+            pattern = preset.toPatternModel()
+            // Presets are 16 steps, ensure grid matches
+            gridStepCount = 16
+        }
+        
+        // Update engine
+        engine.setPattern(pattern)
+        engine.setTempo(tempo)
+        
+        // Automatically start playback
+        engine.play()
     }
     
     private var stepCountSelector: some View {
@@ -77,16 +126,13 @@ struct PatternBuilderModeView: View {
     private var tempoControl: some View {
         VStack(spacing: 8) {
             HStack {
-                Text("Speed")
+                Text("Tempo")
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(.white.opacity(0.6))
                 Spacer()
-                Text("\(Int(tempo))")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
             }
             
-            Slider(value: $tempo, in: 40...200, step: 1)
+            Slider(value: $tempo, in: 20...120, step: 1)
                 .tint(.white.opacity(0.8))
         }
     }

@@ -147,11 +147,14 @@ struct HapticPatternLibrary {
     /// Returns a Core Haptics pattern for the given texture type.
     ///
     /// - Parameter type: The texture type from Texture Lab.
-    /// - Parameter baseIntensity: Overall scaling factor (`0.0 ... 1.0`).
+    /// - Parameter baseIntensity: Overall scaling factor. Values > 1.0 allowed for Layer mode intensity scaling.
+    ///   Core Haptics will cap final intensity values at 1.0, so this is safe.
     static func texturePattern(for type: TextureType, baseIntensity: Float = 1.0) throws -> CHHapticPattern? {
         guard type != .none else { return nil }
         
-        let scaled = max(0.0, min(baseIntensity, 1.0))
+        // Allow values > 1.0 for Layer mode intensity scaling
+        // Core Haptics will cap the final intensity parameter at 1.0, so this is safe
+        let scaled = max(0.0, baseIntensity)
         
         switch type {
         case .deepPulse:
@@ -210,11 +213,11 @@ struct HapticPatternLibrary {
     /// Feels crisp and percussive.
     ///
     /// - Duration: 0.06s
-    /// - Intensity: 0.9 (scaled)
+    /// - Intensity: 0.75 (scaled) - reduced from 0.9 for better balance
     /// - Sharpness: 0.95
     private static func sharpTap(intensityScale: Float) throws -> CHHapticPattern {
         let intensity = CHHapticEventParameter(parameterID: .hapticIntensity,
-                                               value: 0.9 * intensityScale)
+                                               value: 0.75 * intensityScale)
         let sharpness = CHHapticEventParameter(parameterID: .hapticSharpness,
                                                value: 0.95)
         
@@ -226,8 +229,8 @@ struct HapticPatternLibrary {
         
         // Quick attack, fast decay
         let controlPoints: [CHHapticParameterCurve.ControlPoint] = [
-            .init(relativeTime: 0.0, value: 0.9 * intensityScale),
-            .init(relativeTime: 0.02, value: 0.9 * intensityScale),
+            .init(relativeTime: 0.0, value: 0.75 * intensityScale),
+            .init(relativeTime: 0.02, value: 0.75 * intensityScale),
             .init(relativeTime: 0.06, value: 0.0)
         ]
         
@@ -269,30 +272,30 @@ struct HapticPatternLibrary {
         return try CHHapticPattern(events: events, parameters: [])
     }
     
-    /// Soft Wave: Long continuous vibration, low intensity, smooth fade in/out.
-    /// Ambient background layer.
+    /// Soft Wave: Long continuous vibration, low-medium intensity, extremely smooth fade in/out.
+    /// Ambient background layer - should feel gentle and flowing but still perceptible.
     ///
-    /// - Duration: 0.5s
-    /// - Intensity: 0.3 (scaled)
-    /// - Sharpness: 0.1
+    /// - Duration: 0.6s (increased for more gentle feel)
+    /// - Intensity: 0.5 (scaled) - balanced for soft but perceptible feel
+    /// - Sharpness: 0.05 (reduced for softer texture)
     private static func softWave(intensityScale: Float) throws -> CHHapticPattern {
         let intensity = CHHapticEventParameter(parameterID: .hapticIntensity,
-                                               value: 0.3 * intensityScale)
+                                               value: 0.5 * intensityScale)
         let sharpness = CHHapticEventParameter(parameterID: .hapticSharpness,
-                                               value: 0.1)
+                                               value: 0.05)
         
-        let duration: TimeInterval = 0.5
+        let duration: TimeInterval = 0.6
         let event = CHHapticEvent(eventType: .hapticContinuous,
                                   parameters: [intensity, sharpness],
                                   relativeTime: 0,
                                   duration: duration)
         
-        // Very smooth fade in/out
+        // Extremely smooth, gradual fade in/out for gentle feel
         let controlPoints: [CHHapticParameterCurve.ControlPoint] = [
             .init(relativeTime: 0.0, value: 0.0),
-            .init(relativeTime: 0.1, value: 0.3 * intensityScale),
-            .init(relativeTime: 0.4, value: 0.3 * intensityScale),
-            .init(relativeTime: 0.5, value: 0.0)
+            .init(relativeTime: 0.15, value: 0.5 * intensityScale),  // Slower fade in
+            .init(relativeTime: 0.45, value: 0.5 * intensityScale),  // Longer sustain
+            .init(relativeTime: 0.6, value: 0.0)                      // Slower fade out
         ]
         
         let curve = CHHapticParameterCurve(

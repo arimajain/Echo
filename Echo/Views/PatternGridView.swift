@@ -3,26 +3,31 @@ import UIKit
 import Combine
 
 /// Grid view for building tactile patterns step-by-step.
+/// Uses quadrant-based tiles: each tile divided into 4 zones for direct texture assignment.
 struct PatternGridView: View {
     @Binding var pattern: PatternModel
     let stepCount: Int
     var engine: TextureLabEngine? = nil
     
-    /// Color mapping for each texture type
+    /// Texture color mapping
     private func color(for texture: TextureType) -> Color {
         switch texture {
-        case .none:
-            return Color.white.opacity(0.1)
-        case .deepPulse:
-            return Color.blue.opacity(0.6)
-        case .sharpTap:
-            return Color.red.opacity(0.6)
-        case .rapidTexture:
-            return Color.yellow.opacity(0.6)
-        case .softWave:
-            return Color.green.opacity(0.6)
-        default:
-            return Color.white.opacity(0.2)
+        case .deepPulse: return .blue
+        case .sharpTap: return .yellow
+        case .rapidTexture: return .purple
+        case .softWave: return .green
+        default: return .white
+        }
+    }
+    
+    /// Icon name for each texture
+    private func iconName(for texture: TextureType) -> String {
+        switch texture {
+        case .deepPulse: return "waveform.path"
+        case .sharpTap: return "circle.fill"
+        case .rapidTexture: return "chart.bar.fill"
+        case .softWave: return "waveform"
+        default: return ""
         }
     }
     
@@ -33,239 +38,217 @@ struct PatternGridView: View {
         let isPlaying = engine?.isPlaying ?? false
         
         return VStack(spacing: 16) {
-            // Grid with liquid glass design
+            // Clean grid with quadrant-based tiles
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 12) {
                 ForEach(0..<stepCount, id: \.self) { index in
-                    gridCell(at: index, currentStep: currentStep, isPlaying: isPlaying)
+                    quadrantTile(at: index, currentStep: currentStep, isPlaying: isPlaying)
                 }
             }
         }
         .id(refreshID)
         .onReceive(engine?.objectWillChange.eraseToAnyPublisher() ?? Empty().eraseToAnyPublisher()) { _ in
-            // Force view refresh when engine publishes changes
             refreshID = UUID()
         }
     }
     
     @ViewBuilder
-    private func gridCell(at index: Int, currentStep: Int, isPlaying: Bool) -> some View {
-        // Bounds check to prevent index out of range
-        // Always read from current pattern state, not a captured value
+    private func quadrantTile(at index: Int, currentStep: Int, isPlaying: Bool) -> some View {
         if index >= 0 && index < pattern.steps.count {
-            // Read step directly from pattern binding to ensure we have latest state
             let step = pattern.steps[index]
-            let isActive = step.texture != .none
-            let isPulsing = isPlaying && currentStep == index
+            let isCurrentStep = isPlaying && currentStep == index
+            let hasDeep = step.textures.contains(.deepPulse)
+            let hasSharp = step.textures.contains(.sharpTap)
+            let hasRapid = step.textures.contains(.rapidTexture)
+            let hasSoft = step.textures.contains(.softWave)
+            let hasAny = !step.isEmpty
             
-            Button {
-                // Get current texture and calculate next
-                let currentTexture = pattern.steps[index].texture
-                let nextTexture = currentTexture.next()
+            ZStack {
+                // Base tile: dark matte fill
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.black.opacity(0.4))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.3), radius: 2, x: 0, y: 1)
                 
-                // Update pattern directly
-                var updatedPattern = pattern
-                updatedPattern.cycleTexture(at: index)
-                pattern = updatedPattern
-                
-                // Immediately update engine with new pattern (don't wait for onChange)
-                engine?.setPattern(pattern)
-                
-                // Play the haptic pattern for the texture being selected (if not none)
-                if nextTexture != .none {
-                    if let hapticPattern = try? HapticPatternLibrary.texturePattern(for: nextTexture, baseIntensity: 1.0) {
-                        _ = HapticManager.shared.playTexturePattern(hapticPattern, name: "Builder Select Step \(index + 1) - \(nextTexture.displayName)")
+                // 2x2 Grid structure for quadrants
+                VStack(spacing: 0) {
+                    HStack(spacing: 0) {
+                        // Top-left: Deep
+                        quadrantCell(
+                            texture: .deepPulse,
+                            isActive: hasDeep,
+                            isCurrentStep: isCurrentStep,
+                            index: index
+                        )
+                        
+                        // Top-right: Sharp
+                        quadrantCell(
+                            texture: .sharpTap,
+                            isActive: hasSharp,
+                            isCurrentStep: isCurrentStep,
+                            index: index
+                        )
                     }
-                }
-            } label: {
-                ZStack {
-                    // Liquid glass background
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(
-                            // Glassmorphic gradient
-                            LinearGradient(
-                                colors: cellGlassColors(
-                                    isActive: isActive,
-                                    texture: step.texture
-                                ),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .background(
-                            // Frosted glass blur effect
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(.ultraThinMaterial)
-                        )
-                        .overlay(
-                            // Glass border with glow
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(
-                                    LinearGradient(
-                                        colors: cellBorderGradient(isActive: isActive),
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: isActive ? 1.5 : 1
-                                )
-                        )
-                        .shadow(
-                            color: isActive ? cellGlowColor(texture: step.texture) : Color.clear,
-                            radius: isActive ? 4 : 0,
-                            x: 0,
-                            y: 0
-                        )
-                        .shadow(
-                            color: Color.black.opacity(0.3),
-                            radius: isActive ? 8 : 3,
-                            x: 0,
-                            y: isActive ? 4 : 1
-                        )
-                        .shadow(
-                            color: isActive ? Color.clear : Color.black.opacity(0.4),
-                            radius: isActive ? 0 : 2,
-                            x: 0,
-                            y: isActive ? 0 : 1
-                        )
-                        .scaleEffect(isPulsing ? 1.02 : 1.0)
-                        .shadow(
-                            color: isPulsing ? cellGlowColor(texture: step.texture).opacity(0.25) : Color.clear,
-                            radius: isPulsing ? 6 : 0,
-                            x: 0,
-                            y: 0
-                        )
-                        .frame(height: 60)
-                        .animation(
-                            .easeInOut(duration: 0.4),
-                            value: isPulsing
-                        )
                     
-                    // Content with depth
-                    if isActive {
-                        ZStack {
-                            // Subtle inner glow
-                            Image(systemName: iconName(for: step.texture))
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [
-                                            .white.opacity(0.95),
-                                            .white.opacity(0.8)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .shadow(color: cellGlowColor(texture: step.texture).opacity(0.4), radius: 4)
-                        }
-                    } else {
-                        Text("\(index + 1)")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        .white.opacity(0.25),
-                                        .white.opacity(0.15)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                    HStack(spacing: 0) {
+                        // Bottom-left: Rapid
+                        quadrantCell(
+                            texture: .rapidTexture,
+                            isActive: hasRapid,
+                            isCurrentStep: isCurrentStep,
+                            index: index
+                        )
+                        
+                        // Bottom-right: Soft
+                        quadrantCell(
+                            texture: .softWave,
+                            isActive: hasSoft,
+                            isCurrentStep: isCurrentStep,
+                            index: index
+                        )
                     }
                 }
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                
+                // Subtle divider lines (cross pattern)
+                GeometryReader { geometry in
+                    // Vertical divider (centered)
+                    Rectangle()
+                        .fill(Color.white.opacity(0.03))
+                        .frame(width: 1)
+                        .frame(height: geometry.size.height)
+                        .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+                    
+                    // Horizontal divider (centered)
+                    Rectangle()
+                        .fill(Color.white.opacity(0.03))
+                        .frame(width: geometry.size.width, height: 1)
+                        .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+                }
+                
+               
+                
+                // Step number (centered, above everything except playhead glow)
+                Text("\(index + 1)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.3))
+                    .zIndex(1)
             }
-            .buttonStyle(.plain)
+            .scaleEffect(isCurrentStep ? 1.03 : 1.0)
+            .shadow(
+                color: isCurrentStep ? Color.white.opacity(0.15) : Color.clear,
+                radius: isCurrentStep ? 8 : 0
+            )
+            .animation(.easeInOut(duration: 0.2), value: isCurrentStep)
+            .frame(height: 80)
         } else {
-            // Fallback for out-of-bounds indices - liquid glass style
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.15),
-                                    Color.white.opacity(0.05)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
+            // Fallback for out-of-bounds
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.black.opacity(0.4))
+                .frame(height: 80)
+        }
+    }
+    
+    @ViewBuilder
+    private func quadrantCell(
+        texture: TextureType,
+        isActive: Bool,
+        isCurrentStep: Bool,
+        index: Int
+    ) -> some View {
+        let baseColor = color(for: texture)
+        let icon = iconName(for: texture)
+        
+        ZStack {
+            // Quadrant background (transparent when inactive, colored when active)
+            if isActive {
+                Rectangle()
+                    .fill(baseColor.opacity(0.15))
+                    .overlay(
+                        // Subtle inner glow when active
+                        Rectangle()
+                            .fill(baseColor.opacity(isCurrentStep ? 0.3 : 0.08))
+                    )
+            } else {
+                Color.clear
+            }
+            
+            // Icon in center of quadrant
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(isActive ? 0.1 : 0.03))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            toggleTexture(texture, at: index)
+        }
+    }
+    
+    /// Blends colors from active quadrants to create background color for step number
+    private func blendActiveQuadrantColors(hasDeep: Bool, hasSharp: Bool, hasRapid: Bool, hasSoft: Bool) -> Color {
+        var red: Double = 0
+        var green: Double = 0
+        var blue: Double = 0
+        var totalWeight: Double = 0
+        
+        // Deep Pulse (Blue: 0, 0, 1)
+        if hasDeep {
+            totalWeight += 1
+            blue += 1
+        }
+        
+        // Sharp Tap (Yellow: 1, 1, 0)
+        if hasSharp {
+            totalWeight += 1
+            red += 1
+            green += 1
+        }
+        
+        // Rapid Texture (Purple: 0.5, 0, 1)
+        if hasRapid {
+            totalWeight += 1
+            red += 0.5
+            blue += 1
+        }
+        
+        // Soft Wave (Green: 0, 1, 0)
+        if hasSoft {
+            totalWeight += 1
+            green += 1
+        }
+        
+        guard totalWeight > 0 else {
+            return .white
+        }
+        
+        red /= totalWeight
+        green /= totalWeight
+        blue /= totalWeight
+        
+        return Color(red: red, green: green, blue: blue)
+    }
+    
+    private func toggleTexture(_ texture: TextureType, at index: Int) {
+        var updatedPattern = pattern
+        updatedPattern.toggleTexture(texture, at: index)
+        pattern = updatedPattern
+        
+        // Immediately update engine
+        engine?.setPattern(pattern)
+        
+        // Preview haptic for the toggled texture
+        let newStep = pattern.steps[index]
+        if newStep.textures.contains(texture) {
+            // Texture was added - play preview
+            if let hapticPattern = try? HapticPatternLibrary.texturePattern(for: texture, baseIntensity: 1.0) {
+                _ = HapticManager.shared.playTexturePattern(
+                    hapticPattern,
+                    name: "Builder Toggle Step \(index + 1) - \(texture.displayName)"
                 )
-                .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-                .frame(height: 60)
-                .overlay(
-                    Text("\(index + 1)")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.2))
-                )
-        }
-    }
-    
-    // MARK: - Cell Visual Helpers (Liquid Glass)
-    
-    private func cellGlassColors(isActive: Bool, texture: TextureType) -> [Color] {
-        if isActive {
-            // Active: colored glass with texture-specific tint - floats above
-            let baseColor = color(for: texture)
-            return [
-                baseColor.opacity(0.25),
-                baseColor.opacity(0.15),
-                baseColor.opacity(0.08)
-            ]
-        } else {
-            // Inactive: darker, more recessed frosted glass
-            return [
-                Color.white.opacity(0.06),
-                Color.white.opacity(0.03),
-                Color.white.opacity(0.01)
-            ]
-        }
-    }
-    
-    private func cellBorderGradient(isActive: Bool) -> [Color] {
-        if isActive {
-            return [
-                Color.white.opacity(0.6),
-                Color.white.opacity(0.3),
-                Color.white.opacity(0.4)
-            ]
-        } else {
-            return [
-                Color.white.opacity(0.2),
-                Color.white.opacity(0.1),
-                Color.white.opacity(0.15)
-            ]
-        }
-    }
-    
-    private func cellGlowColor(texture: TextureType) -> Color {
-        switch texture {
-        case .deepPulse:
-            return Color.blue.opacity(0.18)
-        case .sharpTap:
-            return Color.red.opacity(0.18)
-        case .rapidTexture:
-            return Color.yellow.opacity(0.18)
-        case .softWave:
-            return Color.green.opacity(0.18)
-        default:
-            return Color.white.opacity(0.12)
-        }
-    }
-    
-    private func iconName(for texture: TextureType) -> String {
-        switch texture {
-        case .deepPulse:
-            return "waveform.path"
-        case .sharpTap:
-            return "circle.fill"
-        case .rapidTexture:
-            return "sparkles"
-        case .softWave:
-            return "waveform"
-        default:
-            return ""
+            }
         }
     }
 }

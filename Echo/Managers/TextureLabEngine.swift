@@ -67,7 +67,7 @@ final class TextureLabEngine: ObservableObject {
     /// Sets the tempo in BPM
     /// If currently playing, updates tempo live by recreating timer with new interval
     func setTempo(_ bpm: Double) {
-        let newTempo = max(40.0, min(200.0, bpm))
+        let newTempo = max(20.0, min(120.0, bpm))
         let wasPlaying = isPlaying
         let savedStep = currentStep // Preserve current playhead position
         
@@ -158,9 +158,10 @@ final class TextureLabEngine: ObservableObject {
         
         // Read step state at this moment (pattern may have been edited)
         let step = pattern.steps[currentStep]
+        let textures = Array(step.textures).filter { $0 != .none }
         
-        // Play the texture if active
-        if step.texture != .none {
+        // Play the textures if any are active
+        if !textures.isEmpty {
             // Calculate timing with optional shift
             let playTime: TimeInterval
             
@@ -172,8 +173,8 @@ final class TextureLabEngine: ObservableObject {
                 playTime = CHHapticTimeImmediate
             }
             
-            // Play the texture
-            playTexture(step.texture, at: playTime)
+            // Play all textures assigned to this step as a single combined pattern
+            playCombinedTextures(textures, at: playTime)
         }
         
         // Advance to next step immediately (no delay - timer handles timing)
@@ -187,15 +188,47 @@ final class TextureLabEngine: ObservableObject {
         currentStep = (currentStep + 1) % stepCount
     }
     
-    private func playTexture(_ texture: TextureType, at time: TimeInterval) {
-        guard let hapticPattern = try? HapticPatternLibrary.texturePattern(for: texture, baseIntensity: 1.0) else {
-            return
+    /// Plays one or more textures for a single pattern step.
+    /// All textures play simultaneously at the same time for proper blending.
+    private func playCombinedTextures(_ textures: [TextureType], at time: TimeInterval) {
+        guard !textures.isEmpty else { return }
+        
+        // Global scaling: reduce intensity when multiple textures are active
+        let count = textures.count
+        let globalScale: Float
+        switch count {
+        case 1:
+            globalScale = 1.0
+        case 2:
+            globalScale = 0.85
+        case 3:
+            globalScale = 0.75
+        default: // 4 textures
+            globalScale = 0.65
         }
         
-        // Use shared engine from HapticManager
-        // Note: time parameter is ignored as CHHapticTimeImmediate is used in playTexturePattern
-        let textureName = "Builder Step \(currentStep + 1) - \(texture.displayName)"
-        _ = hapticManager.playTexturePattern(hapticPattern, name: textureName)
+        // Play all textures simultaneously using shared engine
+        guard let engine = hapticManager.sharedEngine else { return }
+        
+        // Ensure engine is running
+        hapticManager.prepare()
+        
+        // Start all patterns at the exact same time (CHHapticTimeImmediate)
+        for texture in textures {
+            guard let pattern = try? HapticPatternLibrary.texturePattern(for: texture, baseIntensity: globalScale) else {
+                continue
+            }
+            
+            do {
+                let player = try engine.makePlayer(with: pattern)
+                try player.start(atTime: CHHapticTimeImmediate)
+            } catch {
+                print("TextureLabEngine: ⚠️ Failed to play \(texture) – \(error.localizedDescription)")
+            }
+        }
+        
+        let textureNames = textures.map { $0.displayName }.joined(separator: "+")
+        print("🎵 HAPTIC: [Builder Step \(currentStep + 1)] - Combined: \(textureNames)")
     }
     
     // MARK: - Pulse & Grouping Mode
